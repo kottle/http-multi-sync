@@ -10,6 +10,6 @@ def configure(conf):
 def build(bld):
   obj = bld.new_task_gen("cxx", "shlib", "node_addon")
   obj.cxxflags = ["-g", "-D_FILE_OFFSET_BITS=64", "-D_LARGEFILE_SOURCE", "-Wall"]
-  obj.target = "curllib"
-  obj.source = "curllib.cc"
+  obj.target = "http-multi-sync"
+  obj.source = "http-multi-sync.cc"
   obj.lib = ["curl"]

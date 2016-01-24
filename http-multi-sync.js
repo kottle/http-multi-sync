@@ -2,9 +2,9 @@ var caseless = require('caseless');
 
 var _cl = null;
 try {
-  _cl = require('./build/Release/curllib.node');
+  _cl = require('./build/Release/http-multi-sync.node');
 } catch (error) {
-  _cl = require('./build/default/curllib.node');
+  _cl = require('./build/default/http-multi-sync.node');
 }
 
 var curllib = new _cl.CurlLib();
