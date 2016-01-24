@@ -108,7 +108,6 @@ public:
       return THROW_BAD_ARGS;
     }
 
-    Local<String> key_method = NanNew<String>("method");
     Local<String> key_url = NanNew<String>("url");
     Local<String> key_headers = NanNew<String>("headers");
     Local<String> key_body = NanNew<String>("body");
@@ -120,31 +119,33 @@ public:
     Local<String> key_pfx = NanNew<String>("pfx");
     Local<String> key_clientKey = NanNew<String>("key");
     Local<String> key_clientKeyPhrase = NanNew<String>("passphrase");
+    Local<String> key_copyname = NanNew<String>("copyname");
+    Local<String> key_file = NanNew<String>("file");
 
     static const Local<String> PFXFORMAT = NanNew<String>("P12");
 
     Local<Array> opt = Local<Array>::Cast(args[0]);
 
-    if (!opt->Has(key_method) ||
-        !opt->Has(key_url) ||
+    if (!opt->Has(key_url) ||
         !opt->Has(key_headers)) {
       return THROW_BAD_ARGS;
     }
 
-    if (!opt->Get(key_method)->IsString() ||
-        !opt->Get(key_url)->IsString()) {
+    if (!opt->Get(key_url)->IsString()) {
       return THROW_BAD_ARGS;
     }
 
-    Local<String> method = Local<String>::Cast(opt->Get(key_method));
-    Local<String> url    = Local<String>::Cast(opt->Get(key_url));
-    Local<Array>  reqh   = Local<Array>::Cast(opt->Get(key_headers));
-    Local<String> body   = NanNew<String>((const char*)"", 0);
+    Local<String> url      = Local<String>::Cast(opt->Get(key_url));
+    Local<Array>  reqh     = Local<Array>::Cast(opt->Get(key_headers));
+    Local<String> copyname = Local<String>::Cast(opt->Get(key_copyname));
+    Local<String> file     = Local<String>::Cast(opt->Get(key_file));
+    Local<String> body     = NanNew<String>((const char*)"", 0);
     Local<String> caCert   = NanNew<String>((const char*)"", 0);
-    Local<String> clientCert   = NanNew<String>((const char*)"", 0);
-    Local<String> clientCertFormat   = NanNew<String>((const char*)"", 0);
-    Local<String> clientKey   = NanNew<String>((const char*)"", 0);
+    Local<String> clientCert       = NanNew<String>((const char*)"", 0);
+    Local<String> clientCertFormat = NanNew<String>((const char*)"", 0);
+    Local<String> clientKey        = NanNew<String>((const char*)"", 0);
     Local<String> clientKeyPhrase   = NanNew<String>((const char*)"", 0);
+
     long connect_timeout_ms = 1 * 60 * 60 * 1000; /* 1 hr in msec */
     long timeout_ms = 1 * 60 * 60 * 1000; /* 1 hr in msec */
     bool rejectUnauthorized = false;
@@ -194,7 +195,8 @@ public:
     // std::cerr<<"rejectUnauthorized: " << rejectUnauthorized << std::endl;
 
     NanUtf8String _body(body);
-    NanUtf8String _method(method);
+    NanUtf8String _copyname(copyname);
+    NanUtf8String _file(file);
     NanUtf8String _url(url);
     NanUtf8String _cacert(caCert);
     NanUtf8String _clientcert(clientCert);
@@ -212,9 +214,15 @@ public:
     buffer.clear();
     headers.clear();
 
-    CURL *curl;
-    CURLcode res = CURLE_FAILED_INIT;
+    struct curl_httppost *formpost=NULL;
+    struct curl_httppost *lastptr=NULL;
+    struct curl_slist *headerlist=NULL;
+    static const char buf[] = "Expect:";
 
+    CURL *curl;
+    CURLM *multi_handle;
+    int still_running;
+    CURLMcode res = CURLM_INTERNAL_ERROR;
     // char error_buffer[CURL_ERROR_SIZE];
     // error_buffer[0] = '\0';
 
@@ -222,8 +230,8 @@ public:
     if (curl) {
       // curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
       // curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, error_buffer);
-
-      curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, *_method);
+      curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
+      
       if (_body.length() > 0) {
         curl_easy_setopt(curl, CURLOPT_POSTFIELDS, *_body);
         curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE,
@@ -265,6 +273,12 @@ public:
         curl_easy_setopt(curl, CURLOPT_SSLKEY, *_clientkey);
       }
 
+      curl_formadd(&formpost, &lastptr,
+              CURLFORM_COPYNAME, *_copyname,
+              CURLFORM_FILE, *_file,
+              CURLFORM_END);
+
+
       struct curl_slist *slist = NULL;
 
       for (size_t i = 0; i < _reqh.size(); ++i) {
@@ -273,11 +287,86 @@ public:
 
       curl_easy_setopt(curl, CURLOPT_HTTPHEADER, slist);
 
-      res = curl_easy_perform(curl);
+      curl_multi_add_handle(multi_handle, curl);
+      curl_multi_perform(multi_handle, &still_running);
+ 
+      do {
+            struct timeval timeout;
+            int rc; /* select() return code */ 
+            CURLMcode mc; /* curl_multi_fdset() return code */ 
+       
+            fd_set fdread;
+            fd_set fdwrite;
+            fd_set fdexcep;
+            int maxfd = -1;
+       
+            long curl_timeo = -1;
+       
+            FD_ZERO(&fdread);
+            FD_ZERO(&fdwrite);
+            FD_ZERO(&fdexcep);
+       
+            /* set a suitable timeout to play around with */ 
+            timeout.tv_sec = 1;
+            timeout.tv_usec = 0;
+       
+            curl_multi_timeout(multi_handle, &curl_timeo);
+            if(curl_timeo >= 0) {
+              timeout.tv_sec = curl_timeo / 1000;
+              if(timeout.tv_sec > 1)
+                timeout.tv_sec = 1;
+              else
+                timeout.tv_usec = (curl_timeo % 1000) * 1000;
+            }
+       
+            /* get file descriptors from the transfers */ 
+            mc = curl_multi_fdset(multi_handle, &fdread, &fdwrite, &fdexcep, &maxfd);
+       
+            if(mc != CURLM_OK)
+            {
+              fprintf(stderr, "curl_multi_fdset() failed, code %d.\n", mc);
+              break;
+            }
+       
+            /* On success the value of maxfd is guaranteed to be >= -1. We call
+               select(maxfd + 1, ...); specially in case of (maxfd == -1) there are
+               no fds ready yet so we call select(0, ...) --or Sleep() on Windows--
+               to sleep 100ms, which is the minimum suggested value in the
+               curl_multi_fdset() doc. */ 
+       
+            if(maxfd == -1) {
+      #ifdef _WIN32
+              Sleep(100);
+              rc = 0;
+      #else
+              /* Portable sleep for platforms other than Windows. */ 
+              struct timeval wait = { 0, 100 * 1000 }; /* 100ms */ 
+              rc = select(0, NULL, NULL, NULL, &wait);
+      #endif
+            }
+            else {
+              /* Note that on some platforms 'timeout' may be modified by select().
+                 If you need access to the original value save a copy beforehand. */ 
+              rc = select(maxfd+1, &fdread, &fdwrite, &fdexcep, &timeout);
+            }
+       
+            switch(rc) {
+            case -1:
+              /* select error */ 
+              break;
+            case 0:
+            default:
+              /* timeout or readable/writable sockets */ 
+              printf("perform!\n");
+              res = curl_multi_perform(multi_handle, &still_running);
+              printf("running: %d!\n", still_running);
+              break;
+            }
+      } while(still_running);
 
+      curl_multi_cleanup(multi_handle);
+      curl_formfree(formpost);
       curl_slist_free_all(slist);
-
-      /* always cleanup */
       curl_easy_cleanup(curl);
     }
 
@@ -293,11 +382,11 @@ public:
       }
       result->Set(NanNew(sym_headers), _h);
     }
-    else if (res == CURLE_OPERATION_TIMEDOUT) {
+/*    else if (res == CURLE_OPERATION_TIMEDOUT) {
       result->Set(NanNew(sym_timedout), NanNew<Integer>(1));
-    } else {
+    } *//*else {
       result->Set(NanNew(sym_error), NanNew<String>(curl_easy_strerror(res)));
-    }
+    }*/
 
     headers.clear();
     NanReturnValue(result);

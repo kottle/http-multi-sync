@@ -63,11 +63,12 @@ CurlRequest.prototype = {
             this._options._timeout.msec : _1_hr_in_ms;
 	var _connect_timeout_ms = this._options._connect_timeout ?
 	    this._options._connect_timeout.msec : _1_hr_in_ms;
-        var ret = curllib.run({
-	    method: this._options.method,
+    var ret = curllib.run({
 	    url: _ep,
 	    headers: _h,
 	    body: this._options.body,
+        copyname: this._options.copyname,
+        file: this._options.file,
 	    connect_timeout_ms: _connect_timeout_ms,
 	    timeout_ms: _timeout_ms,
 	    rejectUnauthorized: this._options.rejectUnauthorized,
@@ -149,6 +150,8 @@ exports.request = function(options) {
     options.headers = options.headers || { };
     options.host = options.host || '127.0.0.1';
     options.body = options.body || '';
+    options.copyname = options.copyname || '';
+    options.file = options.file || '';
     if (options.auth && !options.headers['Authorization']) {
         //basic auth
         options.headers['Authorization'] = 'Basic ' + new Buffer(options.auth).toString('base64');
