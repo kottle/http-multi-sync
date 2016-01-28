@@ -231,12 +231,13 @@ public:
       // curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
       // curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, error_buffer);
       curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
-      
-      if (_body.length() > 0) {
-        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, *_body);
-        curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE,
-                         (curl_off_t)_body.length());
-      }
+
+      curl_formadd(&formpost, &lastptr,
+        CURLFORM_COPYNAME, "file",
+        CURLFORM_FILE, "/Users/eggzero/Projects/EGGZERO/github/http-multi-sync/test.js",
+        CURLFORM_END);
+      curl_easy_setopt(curl, CURLOPT_HTTPPOST, formpost);    
+
       curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1);
       curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 5);
       curl_easy_setopt(curl, CURLOPT_URL, *_url);
@@ -273,11 +274,6 @@ public:
         curl_easy_setopt(curl, CURLOPT_SSLKEY, *_clientkey);
       }
 
-      curl_formadd(&formpost, &lastptr,
-              CURLFORM_COPYNAME, *_copyname,
-              CURLFORM_FILE, *_file,
-              CURLFORM_END);
-
 
       struct curl_slist *slist = NULL;
 
@@ -286,7 +282,9 @@ public:
       }
 
       curl_easy_setopt(curl, CURLOPT_HTTPHEADER, slist);
-
+      /* init a multi stack */ 
+      multi_handle = curl_multi_init();
+ 
       curl_multi_add_handle(multi_handle, curl);
       curl_multi_perform(multi_handle, &still_running);
  

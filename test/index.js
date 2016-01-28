@@ -5,18 +5,20 @@ var assert = require('assert');
 
 var request = require('../').request;
 
-var webPort = 4490;
 var echoServerPath = path.join(__dirname, 'echo-server');
-var DEFAULT_UA = 'http-sync/' + require('../package.json').version;
+var DEFAULT_UA = 'http-mulit-sync/' + require('../package.json').version;
+
+var SESSION_ID="d13bda3a-83b2-4faf-adcb-3805dd90a842";
 
 function mkReq(path, options) {
   options = options || {};
   options.path = path;
-  options.host = options.host || '127.0.0.1';
-  options.port = options.port || webPort;
-  options.headers = options.headers || {};
-  options.headers['User-Agent'] =
-    options.headers['User-Agent'] || DEFAULT_UA;
+  options.host = options.host || 'api.snapnet.it';
+  options.port = options.port || 9898;
+  options.headers = {};
+  options.headers['User-Agent']  = DEFAULT_UA;
+  options.headers['X-BB-SESSION'] = SESSION_ID;
+  console.log("HEADERS:"+ JSON.stringify(options.headers));
   var res = request(options).end();
   try {
     res.echo = JSON.parse(res.body.toString());
@@ -28,44 +30,16 @@ function mkReq(path, options) {
 }
 
 var tests = [
-  function simpleGET() {
-    var res = mkReq('/x');
-    assert.equal(res.echo.method, 'GET');
-    assert.equal(res.echo.url, '/x');
+  function simpleMulti() {
+    console.log("sample");
+    var options = {};
+    options.copyname= "file";
+    options.file= "index.js";
+    var res = mkReq('/file', options);
+    assert.equal(res.echo.url, '/file');
     assert.equal(res.echo.headers.accept, '*/*');
-  },
-  function simplePOST() {
-    var body = '{"x":42}';
-    var res = mkReq('/', { method: 'POST', body: body });
-    assert.equal(res.echo.method, 'POST');
-    assert.equal(res.echo.body, body);
-  },
-  function sendHeaders() {
-    var headers = {
-      'X-Foo': 'bar'
-    };
-    var res = mkReq('/', { headers: headers });
-    assert.equal(res.echo.headers['x-foo'], headers['X-Foo']);
-  },
-  function postJSON() {
-    var body = '{"x":true}';
-    var headers = {
-      'Content-Type': 'application/json'
-    };
-    var res = mkReq('/', { headers: headers, body: body });
-    assert.equal(res.echo.headers['content-type'], headers['Content-Type']);
-    assert.equal(res.echo.body, body);
-  },
-  function externTLS() {
-    var res = mkReq('/r/http/about.json', {
-      host: 'api.reddit.com',
-      protocol: 'https:',
-      port: 443
-    });
-    assert.equal(res.echo.data.url, '/r/http/');
-  },
-  function alwaysPass() {}
-];
+  }
+  ];
 
 function runTests() { // ad-hoc reinvention of tape
   console.log('1..%d', tests.length);
@@ -85,15 +59,4 @@ function runTests() { // ad-hoc reinvention of tape
   process.exit(failed.length ? 1 : 0);
 }
 
-var echoServer = spawn(echoServerPath, [webPort]);
-process.on('exit', function() {
-  if (echoServer) {
-    try {
-      echoServer.kill();
-    }
-    catch (err) {
-      console.error(err.stack);
-    }
-  }
-});
-setTimeout(runTests, 200);
+runTests();

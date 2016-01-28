@@ -142,8 +142,6 @@ CurlRequest.prototype = {
 
 
 exports.request = function(options) {
-    options.method = options.method ? options.method.toUpperCase() : 'GET';
-
     options.protocol = (options.protocol || 'http').replace(/:$/, '');
     options.port = options.port || (options.protocol === 'https' ? 443 : 80);
     options.path = options.path || '/';
@@ -152,6 +150,7 @@ exports.request = function(options) {
     options.body = options.body || '';
     options.copyname = options.copyname || '';
     options.file = options.file || '';
+    console.log("options:"+JSON.stringify(options));
     if (options.auth && !options.headers['Authorization']) {
         //basic auth
         options.headers['Authorization'] = 'Basic ' + new Buffer(options.auth).toString('base64');
