@@ -6,7 +6,7 @@ var assert = require('assert');
 var request = require('../').request;
 
 var echoServerPath = path.join(__dirname, 'echo-server');
-var DEFAULT_UA = 'http-mulit-sync/' + require('../package.json').version;
+var DEFAULT_UA = 'http-multi-sync/' + require('../package.json').version;
 
 var SESSION_ID="d13bda3a-83b2-4faf-adcb-3805dd90a842";
 
@@ -34,7 +34,7 @@ var tests = [
     console.log("sample");
     var options = {};
     options.copyname= "file";
-    options.file= "index.js";
+    options.file= "README.md";
     var res = mkReq('/file', options);
     assert.equal(res.echo.url, '/file');
     assert.equal(res.echo.headers.accept, '*/*');

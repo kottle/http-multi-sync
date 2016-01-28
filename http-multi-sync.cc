@@ -233,8 +233,8 @@ public:
       curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
 
       curl_formadd(&formpost, &lastptr,
-        CURLFORM_COPYNAME, "file",
-        CURLFORM_FILE, "/Users/eggzero/Projects/EGGZERO/github/http-multi-sync/test.js",
+        CURLFORM_COPYNAME, *_copyname,
+        CURLFORM_FILE, *_file,
         CURLFORM_END);
       curl_easy_setopt(curl, CURLOPT_HTTPPOST, formpost);    
 
